@@ -155,14 +155,24 @@ ALL_ATTRIBUTES = [attr for group in ATTRIBUTES.values() for attr in group]
 @st.cache_resource
 def load_models():
     """Load all models, scaler, and feature list."""
-    # Correct path relative to deploy/ folder
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    MODELS_DIR = os.path.join(base_dir, '..', 'models', 'v7')
     
+    # Try finding models in local 'models/v7' (Deployment) or parent '../models/v7' (Dev)
+    local_path = os.path.join(base_dir, 'models', 'v7')
+    parent_path = os.path.join(base_dir, '..', 'models', 'v7')
+    
+    if os.path.exists(local_path) and os.path.exists(os.path.join(local_path, 'scaler.pkl')):
+        MODELS_DIR = local_path
+    elif os.path.exists(parent_path):
+        MODELS_DIR = parent_path
+    else:
+        MODELS_DIR = local_path # Default to local for error message clarity if both fail
+
     try:
         scaler = joblib.load(os.path.join(MODELS_DIR, 'scaler.pkl'))
         features = joblib.load(os.path.join(MODELS_DIR, 'features.pkl'))
     except FileNotFoundError:
+        st.error(f"⚠️ Critical files missing! Checked locations:\\n1. {local_path}\\n2. {parent_path}")
         return None, [], {}, {}
     
     attr_models = {}

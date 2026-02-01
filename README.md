@@ -2,6 +2,8 @@
 
 🏀 Predict NBA 2K player ratings and badges from real NBA stats!
 
+[Live App](https://basabu1-nba-2k-rating-predictor-app-yhrvyq.streamlit.app/)
+
 ## Features
 
 - **36 Attribute Predictions**: From Close Shot to Intangibles
