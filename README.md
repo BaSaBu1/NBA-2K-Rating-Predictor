@@ -7,12 +7,13 @@
 - **36 Attribute Predictions**: From Close Shot to Intangibles
 - **40 Badge Predictions**: Sorted by tier (HOF → Bronze)
 - **Trained on 1,253 Real NBA Players**: Multi-era data from 1964-2025
-- **Average MAE: 2.32**: High accuracy predictions
+
+> ⚠️ **Note:** These predictions are approximations based on basic stats. Some attributes (especially, defensive and athletic) are difficult to capture from box scores alone. Use these as a starting point and adjust based on your own judgment.
 
 ## How to Use
 
 1. Enter the player's physical attributes (Height, Weight, Wingspan)
-2. Enter their season totals (Games, Minutes, Points, etc.)
+2. Enter their season average stats from a specific season (Games, Minutes, Points, etc.)
 3. Click "Predict Ratings" to get all 36 attributes + badges
 
 ## Local Development
@@ -24,7 +25,6 @@ streamlit run app.py
 
 ## Support
 
-If you find this useful, consider [buying me a coffee](https://buymeacoffee.com/yourusername)! ☕
+If this tool helps you with your roster edits or content creation, consider [buying me a coffee](https://buymeacoffee.com/basabu)!☕ It helps keep me motivated and models updating. Future updates will wll improve accuracy, and include hot zones, tendencies, etc... using advanced nba stats to provide even better prediction!
 
 ---
-Built with ❤️ using real NBA statistics

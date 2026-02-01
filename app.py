@@ -1,89 +1,134 @@
-"""
-NBA 2K Rating Predictor - Streamlit App v7
-Predicts player attributes and badges from real NBA stats.
-Trained on 1,253 NBA players with Avg MAE 2.32
-"""
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
 import os
 
-# --- Config ---
+# -----------------------------------------------------------------------------
+# 1. PAGE CONFIGURATION & CSS
+# -----------------------------------------------------------------------------
 st.set_page_config(
-    layout="wide", 
-    page_title="NBA 2K Rating Predictor",
-    page_icon="🏀"
+    page_title="NBA 2K26 Rating Predictor",
+    page_icon="🏀",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Custom CSS for a "Cool/Compact" Dark Theme
 st.markdown("""
 <style>
-    .metric-card {
-        padding: 8px;
-        border-radius: 8px;
-        text-align: center;
-        margin-bottom: 8px;
-        background-color: #1A1C23;
-        border: 1px solid #333;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
-    }
-    .metric-value { font-size: 22px; font-weight: 800; margin: 0; }
-    .metric-label {
-        font-size: 11px; color: #888; text-transform: uppercase;
-        letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    h3 { font-size: 18px !important; color: #E1E1E1 !important; margin-bottom: 5px !important; }
-    h4 { font-size: 14px !important; color: #ff4b4b !important; text-transform: uppercase; margin-top: 5px !important; border-bottom: 1px solid #333; }
-    
-    /* Badge styles */
-    .badge-hof { background: linear-gradient(135deg, #FFD700, #FFA500); color: #000; }
-    .badge-gold { background: linear-gradient(135deg, #DAA520, #B8860B); color: #000; }
-    .badge-silver { background: linear-gradient(135deg, #C0C0C0, #A9A9A9); color: #000; }
-    .badge-bronze { background: linear-gradient(135deg, #CD7F32, #8B4513); color: #fff; }
-    .badge-item {
-        display: inline-block;
-        padding: 5px 12px;
-        margin: 4px;
-        border-radius: 15px;
-        font-size: 13px;
-        font-weight: 600;
+    /* Main background */
+    .stApp {
+        background-color: #0e1117;
     }
     
+    /* Support Box - High Visibility Gradient */
     .support-box {
-        background: linear-gradient(135deg, #1a1c23, #2d2d3d);
-        border: 1px solid #444;
-        border-radius: 10px;
-        padding: 15px;
-        margin: 10px 0;
+        background: linear-gradient(135deg, #2E8651, #1F6A3D); /* Celtics Green Gradient */
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
         text-align: center;
+        margin-top: 30px;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 15px rgba(46, 134, 81, 0.4);
+        border: 1px solid #4CAF50;
+    }
+    .support-box h3 {
+        color: #FFD700 !important; /* Gold text */
+        margin-bottom: 10px;
+        font-weight: 800;
+        font-size: 24px;
+    }
+    .support-box p {
+        font-size: 16px;
+        margin-bottom: 15px;
     }
     .support-box a {
-        color: #ff4b4b !important;
+        color: white !important;
         text-decoration: none;
-        font-weight: 600;
+        font-weight: bold;
+        background-color: #000000;
+        padding: 12px 25px;
+        border-radius: 25px;
+        display: inline-block;
+        margin-top: 10px;
+        border: 2px solid #FFD700;
+        transition: all 0.3s ease;
     }
-    
-    .stNumberInput input { font-size: 14px !important; }
+    .support-box a:hover {
+        background-color: #FFD700;
+        color: black !important;
+        transform: scale(1.05);
+    }
+
+    /* Metric Cards */
+    .metric-card {
+        background-color: #262730;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+        transition: transform 0.2s;
+        margin-bottom: 10px;
+    }
+    .metric-card:hover {
+        border-color: #4CAF50;
+        transform: translateY(-2px);
+    }
+    .metric-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #4CAF50;
+    }
+    .metric-label {
+        font-size: 13px;
+        color: #aaa;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Badge Tags */
+    .badge-item {
+        display: inline-block;
+        padding: 4px 10px;
+        margin: 3px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+        color: #000;
+    }
+    .badge-hof { background: linear-gradient(135deg, #E040FB, #AA00FF); color: white; }
+    .badge-gold { background: linear-gradient(135deg, #FFD700, #FDB931); }
+    .badge-silver { background: linear-gradient(135deg, #E0E0E0, #BDBDBD); }
+    .badge-bronze { background: linear-gradient(135deg, #CD7F32, #A0522D); color: white; }
+
+    /* Tabs Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px; 
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 45px;
+        background-color: #1E1E1E;
+        border-radius: 5px;
+        color: #FFF;
+        flex-grow: 1; /* Make tabs standard width */
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #4CAF50;
+        color: white;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-MODELS_DIR = "models/v7"
+# -----------------------------------------------------------------------------
+# 2. LOGIC & MODELS (From Original App)
+# -----------------------------------------------------------------------------
 
-# Attribute groups for display
-GROUPS = {
-    "Outside Scoring": ['Close Shot', 'Mid-Range Shot', 'Three-Point Shot', 'Free Throw', 'Shot IQ', 'Offensive Consistency'],
-    "Inside Scoring": ['Layup', 'Standing Dunk', 'Driving Dunk', 'Post Hook', 'Post Fade', 'Post Control', 'Draw Foul', 'Hands'],
-    "Playmaking": ['Pass Accuracy', 'Ball Handle', 'Speed with Ball', 'Pass IQ', 'Pass Vision'],
-    "Defense": ['Interior Defense', 'Perimeter Defense', 'Steal', 'Block', 'Help Defense IQ', 'Pass Perception', 'Defensive Consistency'],
-    "Athleticism": ['Speed', 'Agility', 'Strength', 'Vertical', 'Stamina', 'Hustle', 'Overall Durability'],
-    "Rebounding": ['Offensive Rebound', 'Defensive Rebound']
-}
-
-# All attributes
-ALL_ATTRIBUTES = [attr for group in GROUPS.values() for attr in group]
-
-# All badges
+# Constants
+BADGE_MAP = {0: None, 1: 'Bronze', 2: 'Silver', 3: 'Gold', 4: 'HOF'}
 ALL_BADGES = [
     'Ankle Assassin', 'Bail Out', 'Dimer', 'Float Game', 'Glove',
     'Handles For Days', 'Immovable Enforcer', 'Interceptor', 'Layup Mixmaster',
@@ -97,17 +142,28 @@ ALL_BADGES = [
     'Post Powerhouse', 'Hook Specialist', 'Paint Prodigy'
 ]
 
-BADGE_MAP = {0: None, 1: 'Bronze', 2: 'Silver', 3: 'Gold', 4: 'HOF'}
+# Attribute Organization for UI
+ATTRIBUTES = {
+    "Scoring": ['Close Shot', 'Mid-Range Shot', 'Three-Point Shot', 'Free Throw', 'Shot IQ', 'Offensive Consistency', 'Layup', 'Standing Dunk', 'Driving Dunk', 'Post Hook', 'Post Fade', 'Post Control', 'Draw Foul'],
+    "Playmaking": ['Pass Accuracy', 'Ball Handle', 'Speed with Ball', 'Pass IQ', 'Pass Vision', 'Hands'],
+    "Defense": ['Interior Defense', 'Perimeter Defense', 'Steal', 'Block', 'Help Defense IQ', 'Pass Perception', 'Defensive Consistency'],
+    "Athleticism": ['Speed', 'Agility', 'Strength', 'Vertical', 'Stamina', 'Hustle', 'Overall Durability'],
+    "Rebounding": ['Offensive Rebound', 'Defensive Rebound']
+}
+ALL_ATTRIBUTES = [attr for group in ATTRIBUTES.values() for attr in group]
 
 @st.cache_resource
 def load_models():
     """Load all models, scaler, and feature list."""
+    # Correct path relative to deploy/ folder
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    MODELS_DIR = os.path.join(base_dir, '..', 'models', 'v7')
+    
     try:
-        scaler = joblib.load(f'{MODELS_DIR}/scaler.pkl')
-        features = joblib.load(f'{MODELS_DIR}/features.pkl')
-    except:
-        scaler = None
-        features = []
+        scaler = joblib.load(os.path.join(MODELS_DIR, 'scaler.pkl'))
+        features = joblib.load(os.path.join(MODELS_DIR, 'features.pkl'))
+    except FileNotFoundError:
+        return None, [], {}, {}
     
     attr_models = {}
     for attr in ALL_ATTRIBUTES:
@@ -126,18 +182,17 @@ def load_models():
     return scaler, features, attr_models, badge_models
 
 def build_features(user_inputs, feature_list):
-    """Build feature vector matching training features."""
+    """Build feature vector matching training features (CRITICAL for accuracy)."""
     f = {}
     eps = 0.001
     
-    # Basic stats from user
+    # Unpack
     height = user_inputs['height']
     weight = user_inputs['weight']
     wingspan = user_inputs['wingspan']
     gp = user_inputs['gp']
     mins = user_inputs['min']
     pos = user_inputs['position']
-    
     pts = user_inputs['pts']
     fgm = user_inputs['fgm']
     fga = user_inputs['fga']
@@ -154,7 +209,7 @@ def build_features(user_inputs, feature_list):
     blk = user_inputs['blk']
     pf = user_inputs['pf']
     
-    # Basic columns
+    # Basic Feature Mapping
     f['Height_CM'] = height
     f['Weight_KG'] = weight
     f['Wingspan_CM'] = wingspan
@@ -178,8 +233,8 @@ def build_features(user_inputs, feature_list):
     f['STL'] = stl
     f['BLK'] = blk
     f['PF'] = pf
-    f['USG_PCT'] = 0.2  # Default estimate
-    f['PACE'] = 100  # Default estimate
+    f['USG_PCT'] = 0.2  # Default
+    f['PACE'] = 100  # Default
     
     # Position encoding
     positions = ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'G-F', 'F-C', 'F-G', 'C-F']
@@ -190,7 +245,7 @@ def build_features(user_inputs, feature_list):
     f['IS_FORWARD'] = 1 if 'F' in pos else 0
     f['IS_CENTER'] = 1 if pos == 'C' else 0
     
-    # Era (assume modern)
+    # Era
     f['IS_MODERN'] = 1
     f['IS_CLASSIC'] = 0
     f['ERA_FACTOR'] = 1.0
@@ -238,37 +293,28 @@ def build_features(user_inputs, feature_list):
     f['USAGE_PROXY'] = (fga + 0.44*fta + tov) / (mins + eps)
     f['EXPERIENCE'] = gp / 82.0
     
-    # Build feature vector in correct order
-    feature_values = []
-    for feat in feature_list:
-        feature_values.append(f.get(feat, 0))
-    
-    return feature_values
+    # Build list
+    return [f.get(feat, 0) for feat in feature_list]
 
 def predict_all(user_inputs, scaler, features, attr_models, badge_models):
     """Predict all attributes and badges."""
-    # Build features
     feature_values = build_features(user_inputs, features)
     
-    # Scale
     if scaler is not None:
         X = scaler.transform([feature_values])
     else:
         X = [feature_values]
-    
+        
     X_df = pd.DataFrame(X, columns=features)
     
-    # Predict attributes
     attr_preds = {}
     for attr, model in attr_models.items():
         try:
             pred = model.predict(X_df)[0]
-            pred = int(round(np.clip(pred, 25, 99)))
-            attr_preds[attr] = pred
+            attr_preds[attr] =int(round(np.clip(pred, 25, 99)))
         except:
-            attr_preds[attr] = 70
-    
-    # Predict badges
+            pass
+            
     badge_preds = {}
     for badge, model in badge_models.items():
         try:
@@ -278,91 +324,60 @@ def predict_all(user_inputs, scaler, features, attr_models, badge_models):
                 badge_preds[badge] = BADGE_MAP[tier_idx]
         except:
             pass
-    
+            
     return attr_preds, badge_preds
 
-def render_metric_card(label, value):
-    """Render a styled metric card."""
-    color = "#bbb"
-    if isinstance(value, (int, float)):
-        if value >= 90: color = "#2ecc71"
-        elif value >= 80: color = "#f1c40f"
-        elif value >= 70: color = "#bbb"
-        else: color = "#e74c3c"
-    
-    st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value" style="color: {color};">{value}</div>
-            <div class="metric-label" title="{label}">{label}</div>
-        </div>
-    """, unsafe_allow_html=True)
+# -----------------------------------------------------------------------------
+# 3. SIDEBAR & INPUTS (Layout Reverted - No Collapsing)
+# -----------------------------------------------------------------------------
+scaler, features, attr_models, badge_models = load_models()
 
-def render_badges(badge_preds):
-    """Render badges sorted by tier (HOF first)."""
-    tier_order = {'HOF': 0, 'Gold': 1, 'Silver': 2, 'Bronze': 3}
-    tier_class = {'HOF': 'badge-hof', 'Gold': 'badge-gold', 'Silver': 'badge-silver', 'Bronze': 'badge-bronze'}
+with st.sidebar:
+    st.header("🏀 Player Stats Input")
+    st.markdown("Enter per-game stats:")
     
-    sorted_badges = sorted(badge_preds.items(), key=lambda x: tier_order.get(x[1], 99))
-    
-    if not sorted_badges:
-        st.caption("No badges predicted")
-        return
-    
-    html = ""
-    for badge, tier in sorted_badges:
-        css_class = tier_class.get(tier, '')
-        html += f'<span class="badge-item {css_class}">{badge}</span>'
-    
-    st.markdown(html, unsafe_allow_html=True)
+    # Physical
+    st.markdown("### 🧬 Physical")
+    height = st.number_input("Height (cm)", 165, 230, 198)
+    weight = st.number_input("Weight (kg)", 60, 150, 98)
+    wingspan = st.number_input("Wingspan (cm)", 170, 250, 208)
+    position = st.selectbox("Position", ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'G-F', 'F-C'])
 
-def main():
-    st.title("🏀 NBA 2K Rating Predictor")
-    st.caption("Predict player attributes and badges from real NBA stats • Trained on 1,253 NBA players")
-    
-    # Load models
-    scaler, features, attr_models, badge_models = load_models()
-    
-    if not attr_models:
-        st.error("❌ Models not found. Please run trainer_v7.py first.")
-        return
-    
-    # --- Input Section ---
-    with st.expander("📊 Enter Player Stats", expanded=True):
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.markdown("**Physical**")
-            height = st.number_input("Height (cm)", 165, 230, 198, help="Player height in centimeters")
-            weight = st.number_input("Weight (kg)", 60, 150, 98, help="Player weight in kilograms")
-            wingspan = st.number_input("Wingspan (cm)", 170, 250, 208, help="Player wingspan in centimeters")
-            position = st.selectbox("Position", ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'G-F', 'F-C'])
-        
-        with col2:
-            st.markdown("**Season Totals**")
-            gp = st.number_input("Games Played", 1, 82, 65)
-            mins = st.number_input("Minutes", 0.0, 3500.0, 1800.0)
-            pts = st.number_input("Points", 0.0, 3000.0, 850.0)
-            ast = st.number_input("Assists", 0.0, 1000.0, 180.0)
-            tov = st.number_input("Turnovers", 0.0, 400.0, 95.0)
-        
-        with col3:
-            st.markdown("**Shooting**")
-            fgm = st.number_input("FG Made", 0.0, 1200.0, 320.0)
-            fga = st.number_input("FG Attempted", 0.0, 2000.0, 680.0)
-            fg3m = st.number_input("3PT Made", 0.0, 400.0, 85.0)
-            fg3a = st.number_input("3PT Attempted", 0.0, 800.0, 230.0)
-            ftm = st.number_input("FT Made", 0.0, 800.0, 125.0)
-            fta = st.number_input("FT Attempted", 0.0, 1000.0, 165.0)
-        
-        with col4:
-            st.markdown("**Rebounds & Defense**")
-            oreb = st.number_input("Off Rebounds", 0.0, 400.0, 45.0)
-            dreb = st.number_input("Def Rebounds", 0.0, 1000.0, 215.0)
-            stl = st.number_input("Steals", 0.0, 200.0, 55.0)
-            blk = st.number_input("Blocks", 0.0, 300.0, 35.0)
-            pf = st.number_input("Personal Fouls", 0.0, 300.0, 130.0)
-    
-    # Build user inputs dict
+    # Season
+    st.markdown("### 📅 Season")
+    gp = st.number_input("Games Played", 1, 82, 65)
+    mins = st.number_input("Minutes", 0.0, 48.0, 32.0, step=0.5)
+
+    # Scoring
+    st.markdown("### 🎯 Scoring")
+    pts = st.number_input("Points", 0.0, 60.0, 20.0, step=0.1)
+    fgm = st.number_input("FG Made", 0.0, 25.0, 8.0, step=0.1)
+    fga = st.number_input("FG Attempted", 0.0, 50.0, 18.0, step=0.1)
+    fg3m = st.number_input("3PM", 0.0, 15.0, 2.5, step=0.1)
+    fg3a = st.number_input("3PA", 0.0, 30.0, 7.0, step=0.1)
+    ftm = st.number_input("FT Made", 0.0, 25.0, 4.0, step=0.1)
+    fta = st.number_input("FT Attempted", 0.0, 30.0, 5.0, step=0.1)
+
+    # Playmaking & Defense
+    st.markdown("### ⛹️ Playmaking & Def")
+    ast = st.number_input("Assists", 0.0, 20.0, 5.0, step=0.1)
+    tov = st.number_input("Turnovers", 0.0, 10.0, 2.0, step=0.1)
+    oreb = st.number_input("Off Reb", 0.0, 10.0, 1.0, step=0.1)
+    dreb = st.number_input("Def Reb", 0.0, 20.0, 4.0, step=0.1)
+    stl = st.number_input("Steals", 0.0, 10.0, 1.2, step=0.1)
+    blk = st.number_input("Blocks", 0.0, 10.0, 0.8, step=0.1)
+    pf = st.number_input("Fouls", 0.0, 6.0, 2.5, step=0.1)
+
+    predict_btn = st.button("🚀 Predict Ratings", type="primary", use_container_width=True)
+
+# -----------------------------------------------------------------------------
+# 4. MAIN CONTENT
+# -----------------------------------------------------------------------------
+st.title("🏀 NBA 2K26 Rating Predictor")
+st.markdown("### Attribute & Badge Projections")
+
+if predict_btn and attr_models:
+    # 1. Prepare Inputs
     user_inputs = {
         'height': height, 'weight': weight, 'wingspan': wingspan,
         'position': position, 'gp': gp, 'min': mins, 'pts': pts,
@@ -371,65 +386,75 @@ def main():
         'ast': ast, 'tov': tov, 'stl': stl, 'blk': blk, 'pf': pf
     }
     
-    # Predict button
-    if st.button("🎮 Predict Ratings", type="primary", use_container_width=True):
-        with st.spinner("Predicting..."):
-            attr_preds, badge_preds = predict_all(user_inputs, scaler, features, attr_models, badge_models)
-        
-        # --- Display Results ---
-        st.markdown("---")
-        
-        # Overall rating estimate
-        overall = int(np.mean(list(attr_preds.values())))
-        st.markdown(f"### Estimated Overall: **{overall}**")
-        
-        # Attribute groups
-        for group_name, attrs in GROUPS.items():
-            st.markdown(f"#### {group_name}")
-            cols = st.columns(len(attrs))
-            for i, attr in enumerate(attrs):
-                with cols[i]:
-                    val = attr_preds.get(attr, 70)
-                    render_metric_card(attr, val)
-        
-        # Badges
-        st.markdown("---")
-        st.markdown("### 🏅 Predicted Badges")
-        
-        if badge_preds:
-            render_badges(badge_preds)
-            st.caption(f"Total: {len(badge_preds)} badges")
-        else:
-            st.caption("No badges predicted for this player")
+    # 2. Run Prediction with full feature engineering
+    attr_preds, badge_preds = predict_all(user_inputs, scaler, features, attr_models, badge_models)
     
-    # --- Support Section ---
-    st.markdown("---")
-    st.markdown("""
-    <div class="support-box">
-        <h4 style="margin-top: 0; color: #E1E1E1;">☕ Support This Project</h4>
-        <p style="color: #aaa; font-size: 14px; margin-bottom: 10px;">
-            Love this tool? Your support helps me keep improving it!<br>
-            <strong>If this project gets enough support</strong>, I'll add more features like:
-        </p>
-        <ul style="color: #888; font-size: 13px; text-align: left; max-width: 400px; margin: 0 auto 15px;">
-            <li>Player comparison mode</li>
-            <li>Team building recommendations</li>
-            <li>MyCareer build optimizer</li>
-            <li>More accurate badge predictions</li>
-        </ul>
-        <a href="https://buymeacoffee.com/yourusername" target="_blank" 
-           style="background: #FFDD00; color: #000; padding: 10px 25px; border-radius: 5px; 
-                  text-decoration: none; font-weight: bold; display: inline-block;">
-            ☕ Buy Me a Coffee
-        </a>
-        <p style="color: #666; font-size: 11px; margin-top: 10px;">
-            Built with ❤️ using 1,253 real NBA player stats
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    # 3. Display Results
     
-    st.caption("v7.0 • Avg MAE: 2.32 • Trained on NBA players from multiple eras")
+    # --- DISCLAIMER (Restored Text) ---
+    st.warning("⚠️ **Note:** These predictions are approximations based on basic stats. Some attributes (especially, defensive and athletic) are difficult to capture from box scores alone. Use these as a starting point and adjust based on your own judgment.")
 
-if __name__ == "__main__":
-    main()
+    # --- TABS FOR ATTRIBUTES ---
+    tabs = st.tabs(list(ATTRIBUTES.keys()))
+    
+    for i, (category, attrs) in enumerate(ATTRIBUTES.items()):
+        with tabs[i]:
+            cols = st.columns(4)
+            for j, attr in enumerate(attrs):
+                val = attr_preds.get(attr, 70)
+                
+                # Color logic
+                color = "#aaa"
+                if val >= 90: color = "#2ECC71" # Pink
+                elif val >= 80: color = "#3498DB" # Blue
+                elif val >= 70: color = "#F1C40F" # Gold
+                
+                with cols[j % 4]:
+                    st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-label">{attr}</div>
+                        <div class="metric-value" style="color: {color}">{val}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+    
+    # --- BADGES SECTION ---
+    st.markdown("---")
+    st.markdown("### 🏅 Predicted Badges")
+    
+    if badge_preds:
+         # Sort badges: HOF -> Gold -> Silver -> Bronze
+        tier_order = {'HOF': 0, 'Gold': 1, 'Silver': 2, 'Bronze': 3}
+        tier_colors = {'HOF': 'badge-hof', 'Gold': 'badge-gold', 'Silver': 'badge-silver', 'Bronze': 'badge-bronze'}
+        
+        sorted_badges = sorted(badge_preds.items(), key=lambda x: tier_order.get(x[1], 99))
+        
+        badge_html = ""
+        for badge, tier in sorted_badges:
+            badge_html += f'<span class="badge-item {tier_colors[tier]}">{badge} <small>({tier})</small></span>'
+        
+        st.markdown(badge_html, unsafe_allow_html=True)
+    else:
+        st.info("No badges predicted for this statline.")
+
+elif not attr_models:
+    st.error("⚠️ Models not found! Please ensure 'models/v7' contains the valid model files.")
+
+else:
+    st.markdown("""
+    Welcome! Enter player stats in the **sidebar** to generate projected NBA 2K attributes.
+    This tool uses Machine Learning trained on real NBA stats and NBA2K26 datasets.
+    """)
+
+# -----------------------------------------------------------------------------
+# 5. SUPPORT (Bottom of Main Page)
+# -----------------------------------------------------------------------------
+st.markdown("---")
+st.markdown("""
+<div class="support-box">
+    <h3>☕ Support the Project</h3>
+    <p>If this tool helps you with your roster edits or content creation, consider buying me a coffee! It helps keep me motivated and models updating.</p>
+    <p><strong>Note:</strong> Future updates will wll improve accuracy, and include hot zones, tendencies, etc... using advanced nba stats to provide even better prediction!</p>
+    <a href="https://buymeacoffee.com/basabu" target="_blank">☕ Buy me a Coffee</a>
+</div>
+""", unsafe_allow_html=True)
 
