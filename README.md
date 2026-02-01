@@ -25,6 +25,8 @@ streamlit run app.py
 
 ## Support
 
-If this tool helps you with your roster edits or content creation, consider [buying me a coffee](https://buymeacoffee.com/basabu)!☕ It helps keep me motivated and models updating. Future updates will wll improve accuracy, and include hot zones, tendencies, etc... using advanced nba stats to provide even better prediction!
+If this tool helps you with your roster edits or content creation, consider [buying me a coffee](https://buymeacoffee.com/basabu)!☕ It helps keep me motivated and models updating.
+
+> Future updates will wll improve accuracy, and include hot zones, tendencies, etc... using advanced nba stats to provide even better prediction!
 
 ---
