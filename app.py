@@ -334,7 +334,6 @@ scaler, features, attr_models, badge_models = load_models()
 
 with st.sidebar:
     st.header("🏀 Player Stats Input")
-    st.markdown("Enter per-game stats:")
     
     # Physical
     st.markdown("### 🧬 Physical")
@@ -442,7 +441,7 @@ elif not attr_models:
 else:
     st.markdown("""
     Welcome! Enter player stats in the **sidebar** to generate projected NBA 2K attributes.
-    This tool uses Machine Learning trained on real NBA stats and NBA2K26 datasets.
+    This tool uses Machine Learning trained on real NBA stats and NBA 2K26 player attributes.
     """)
 
 # -----------------------------------------------------------------------------
@@ -453,7 +452,7 @@ st.markdown("""
 <div class="support-box">
     <h3>☕ Support the Project</h3>
     <p>If this tool helps you with your roster edits or content creation, consider buying me a coffee! It helps keep me motivated and models updating.</p>
-    <p><strong>Note:</strong> Future updates will wll improve accuracy, and include hot zones, tendencies, etc... using advanced nba stats to provide even better prediction!</p>
+    <p><strong>Note:</strong> Future updates will improve accuracy, and include hot zones, tendencies, etc... using advanced nba stats to provide even better prediction!</p>
     <a href="https://buymeacoffee.com/basabu" target="_blank">☕ Buy me a Coffee</a>
 </div>
 """, unsafe_allow_html=True)
