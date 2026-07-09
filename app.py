@@ -152,10 +152,22 @@ ATTRIBUTES = {
 }
 ALL_ATTRIBUTES = [attr for group in ATTRIBUTES.values() for attr in group]
 
+def load_optional_model(path, label, load_errors):
+    """Load one artifact without letting a single bad pickle crash the app."""
+    if not os.path.exists(path):
+        return None
+
+    try:
+        return joblib.load(path)
+    except Exception as exc:
+        load_errors.append(f"{label} ({os.path.basename(path)}): {exc}")
+        return None
+
 @st.cache_resource
 def load_models():
     """Load all models, scaler, and feature list."""
     base_dir = os.path.dirname(os.path.abspath(__file__))
+    load_errors = []
     
     # Try finding models in local 'models/v7' (Deployment) or parent '../models/v7' (Dev)
     local_path = os.path.join(base_dir, 'models', 'v7')
@@ -171,25 +183,38 @@ def load_models():
     try:
         scaler = joblib.load(os.path.join(MODELS_DIR, 'scaler.pkl'))
         features = joblib.load(os.path.join(MODELS_DIR, 'features.pkl'))
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         st.error(f"⚠️ Critical files missing! Checked locations:\\n1. {local_path}\\n2. {parent_path}")
-        return None, [], {}, {}
+        load_errors.append(f"core artifacts: {exc}")
+        return None, [], {}, {}, load_errors
+    except Exception as exc:
+        load_errors.append(f"core artifacts: {exc}")
+        return None, [], {}, {}, load_errors
     
     attr_models = {}
     for attr in ALL_ATTRIBUTES:
         fname = f"attr_{attr.replace(' ', '_')}.pkl"
         path = os.path.join(MODELS_DIR, fname)
-        if os.path.exists(path):
-            attr_models[attr] = joblib.load(path)
+        model = load_optional_model(path, attr, load_errors)
+        if model is not None:
+            attr_models[attr] = model
     
     badge_models = {}
     for badge in ALL_BADGES:
-        fname = f"badge_{badge.replace(' ', '_').replace('-', '_')}.pkl"
-        path = os.path.join(MODELS_DIR, fname)
-        if os.path.exists(path):
-            badge_models[badge] = joblib.load(path)
+        safe_name = badge.replace(' ', '_')
+        fnames = [
+            f"badge_{safe_name}.pkl",
+            f"badge_{safe_name.replace('-', '_')}.pkl",
+        ]
+
+        for fname in dict.fromkeys(fnames):
+            path = os.path.join(MODELS_DIR, fname)
+            model = load_optional_model(path, badge, load_errors)
+            if model is not None:
+                badge_models[badge] = model
+                break
     
-    return scaler, features, attr_models, badge_models
+    return scaler, features, attr_models, badge_models, load_errors
 
 def build_features(user_inputs, feature_list):
     """Build feature vector matching training features (CRITICAL for accuracy)."""
@@ -309,18 +334,17 @@ def build_features(user_inputs, feature_list):
 def predict_all(user_inputs, scaler, features, attr_models, badge_models):
     """Predict all attributes and badges."""
     feature_values = build_features(user_inputs, features)
+    X_input = pd.DataFrame([feature_values], columns=features)
     
     if scaler is not None:
-        X = scaler.transform([feature_values])
+        X = scaler.transform(X_input)
     else:
-        X = [feature_values]
-        
-    X_df = pd.DataFrame(X, columns=features)
+        X = X_input.to_numpy()
     
     attr_preds = {}
     for attr, model in attr_models.items():
         try:
-            pred = model.predict(X_df)[0]
+            pred = model.predict(X)[0]
             attr_preds[attr] =int(round(np.clip(pred, 25, 99)))
         except:
             pass
@@ -328,7 +352,7 @@ def predict_all(user_inputs, scaler, features, attr_models, badge_models):
     badge_preds = {}
     for badge, model in badge_models.items():
         try:
-            pred = model.predict(X_df)[0]
+            pred = model.predict(X)[0]
             tier_idx = int(round(np.clip(pred, 0, 4)))
             if tier_idx > 0:
                 badge_preds[badge] = BADGE_MAP[tier_idx]
@@ -340,42 +364,51 @@ def predict_all(user_inputs, scaler, features, attr_models, badge_models):
 # -----------------------------------------------------------------------------
 # 3. SIDEBAR & INPUTS (Layout Reverted - No Collapsing)
 # -----------------------------------------------------------------------------
-scaler, features, attr_models, badge_models = load_models()
+scaler, features, attr_models, badge_models, load_errors = load_models()
+
+if load_errors:
+    shown_errors = "\n".join(f"- {err}" for err in load_errors[:5])
+    if len(load_errors) > 5:
+        shown_errors += f"\n- ...and {len(load_errors) - 5} more"
+    st.warning(
+        "Some model files could not be loaded. Missing predictions will use defaults.\n\n"
+        f"{shown_errors}"
+    )
 
 with st.sidebar:
     st.header("🏀 Player Stats Input")
     
     # Physical
     st.markdown("### 🧬 Physical")
-    height = st.number_input("Height (cm)", 165, 230, 198)
-    weight = st.number_input("Weight (kg)", 60, 150, 98)
-    wingspan = st.number_input("Wingspan (cm)", 170, 250, 208)
-    position = st.selectbox("Position", ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'G-F', 'F-C'])
+    height = st.number_input("Height (cm)", 165, 230, 203)
+    weight = st.number_input("Weight (kg)", 60, 150, 113)
+    wingspan = st.number_input("Wingspan (cm)", 170, 250, 213)
+    position = st.selectbox("Position", ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'G-F', 'F-C'], index=2)
 
     # Season
     st.markdown("### 📅 Season")
-    gp = st.number_input("Games Played", 1, 82, 65)
-    mins = st.number_input("Minutes", 0.0, 48.0, 32.0, step=0.5)
+    gp = st.number_input("Games Played", 1, 82, 76)
+    mins = st.number_input("Minutes", 0.0, 48.0, 37.9, step=0.1)
 
     # Scoring
     st.markdown("### 🎯 Scoring")
-    pts = st.number_input("Points", 0.0, 60.0, 20.0, step=0.1)
-    fgm = st.number_input("FG Made", 0.0, 25.0, 8.0, step=0.1)
-    fga = st.number_input("FG Attempted", 0.0, 50.0, 18.0, step=0.1)
-    fg3m = st.number_input("3PM", 0.0, 15.0, 2.5, step=0.1)
-    fg3a = st.number_input("3PA", 0.0, 30.0, 7.0, step=0.1)
-    ftm = st.number_input("FT Made", 0.0, 25.0, 4.0, step=0.1)
-    fta = st.number_input("FT Attempted", 0.0, 30.0, 5.0, step=0.1)
+    pts = st.number_input("Points", 0.0, 60.0, 26.8, step=0.1)
+    fgm = st.number_input("FG Made", 0.0, 25.0, 10.1, step=0.1)
+    fga = st.number_input("FG Attempted", 0.0, 50.0, 17.8, step=0.1)
+    fg3m = st.number_input("3PM", 0.0, 15.0, 1.4, step=0.1)
+    fg3a = st.number_input("3PA", 0.0, 30.0, 3.3, step=0.1)
+    ftm = st.number_input("FT Made", 0.0, 25.0, 5.3, step=0.1)
+    fta = st.number_input("FT Attempted", 0.0, 30.0, 7.0, step=0.1)
 
     # Playmaking & Defense
     st.markdown("### ⛹️ Playmaking & Def")
-    ast = st.number_input("Assists", 0.0, 20.0, 5.0, step=0.1)
-    tov = st.number_input("Turnovers", 0.0, 10.0, 2.0, step=0.1)
-    oreb = st.number_input("Off Reb", 0.0, 10.0, 1.0, step=0.1)
-    dreb = st.number_input("Def Reb", 0.0, 20.0, 4.0, step=0.1)
-    stl = st.number_input("Steals", 0.0, 10.0, 1.2, step=0.1)
-    blk = st.number_input("Blocks", 0.0, 10.0, 0.8, step=0.1)
-    pf = st.number_input("Fouls", 0.0, 6.0, 2.5, step=0.1)
+    ast = st.number_input("Assists", 0.0, 20.0, 7.3, step=0.1)
+    tov = st.number_input("Turnovers", 0.0, 10.0, 3.0, step=0.1)
+    oreb = st.number_input("Off Reb", 0.0, 10.0, 1.3, step=0.1)
+    dreb = st.number_input("Def Reb", 0.0, 20.0, 6.8, step=0.1)
+    stl = st.number_input("Steals", 0.0, 10.0, 1.7, step=0.1)
+    blk = st.number_input("Blocks", 0.0, 10.0, 0.9, step=0.1)
+    pf = st.number_input("Fouls", 0.0, 6.0, 1.4, step=0.1)
 
     predict_btn = st.button("🚀 Predict Ratings", type="primary", use_container_width=True)
 
